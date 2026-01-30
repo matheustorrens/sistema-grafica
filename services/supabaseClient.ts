@@ -12,10 +12,44 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Create and export the Supabase client instance
-// We use fallback strings to avoid immediate runtime crashes if env vars are missing,
-// although requests will fail until properly configured.
+// Custom fetch implementation with Retry Logic
+const fetchWithRetry = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, options);
+
+      // If response is a server error (500-599), usually indicates maintenance or restart
+      // We retry these as well.
+      if (!response.ok && response.status >= 500 && response.status < 600) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      // If it's the last attempt, rethrow the error
+      if (attempt === MAX_RETRIES) {
+        throw error;
+      }
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+    }
+  }
+  
+  // TypeScript fallback (should be unreachable due to throw above)
+  throw new Error('Network request failed after retries');
+};
+
+// Create and export the Supabase client instance with the custom fetch
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder'
+  supabaseAnonKey || 'placeholder',
+  {
+    global: {
+      fetch: fetchWithRetry,
+    },
+  }
 );
