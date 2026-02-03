@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
@@ -15,16 +16,25 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
     clientPhone: '',
     description: '',
     totalAmount: '',
+    downPayment: '',
     deadline: '',
     status: ''
   });
 
-  // Set default status when modal opens or statuses load
+  // Reset form when modal opens
   useEffect(() => {
-    if (orderStatuses.length > 0 && !formData.status) {
-        setFormData(prev => ({ ...prev, status: orderStatuses[0].label }));
+    if (isOpen) {
+        setFormData({
+            clientName: '',
+            clientPhone: '',
+            description: '',
+            totalAmount: '',
+            downPayment: '',
+            deadline: '',
+            status: orderStatuses.length > 0 ? orderStatuses[0].label : ''
+        });
     }
-  }, [orderStatuses, isOpen]);
+  }, [isOpen, orderStatuses]);
 
   if (!isOpen) return null;
 
@@ -32,7 +42,8 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
     e.preventDefault();
     onSave({
       ...formData,
-      totalAmount: parseFloat(formData.totalAmount) || 0
+      totalAmount: parseFloat(formData.totalAmount) || 0,
+      downPayment: parseFloat(formData.downPayment) || 0
     });
   };
 
@@ -82,6 +93,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
             />
           </div>
 
+          {/* Linha Financeira: Total e Sinal */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Valor Total (R$)</label>
@@ -97,6 +109,22 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Sinal / Entrada (R$)</label>
+              <input 
+                type="number" 
+                step="0.01"
+                min="0"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400"
+                value={formData.downPayment}
+                onChange={e => setFormData({...formData, downPayment: e.target.value})}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+
+          {/* Linha Prazo e Status */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Prazo de Entrega</label>
                <input 
                 required
@@ -106,19 +134,18 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                 onChange={e => setFormData({...formData, deadline: e.target.value})}
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Status Inicial</label>
-            <select 
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-white dark:bg-slate-900 text-gray-900 dark:text-white"
-              value={formData.status}
-              onChange={e => setFormData({...formData, status: e.target.value})}
-            >
-              {orderStatuses.map(s => (
-                <option key={s.id} value={s.label}>{s.label}</option>
-              ))}
-            </select>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Status Inicial</label>
+              <select 
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-white dark:bg-slate-900 text-gray-900 dark:text-white"
+                value={formData.status}
+                onChange={e => setFormData({...formData, status: e.target.value})}
+              >
+                {orderStatuses.map(s => (
+                  <option key={s.id} value={s.label}>{s.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="pt-4 flex gap-3">

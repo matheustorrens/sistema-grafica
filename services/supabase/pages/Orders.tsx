@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Order, OrderStatus } from '../types';
@@ -57,7 +58,21 @@ const Orders: React.FC = () => {
 
   const handleCreateOrder = async (orderData: any) => {
     try {
-      await api.createOrder(orderData);
+      // Separar o 'downPayment' (sinal) dos dados do pedido
+      const { downPayment, ...cleanOrderData } = orderData;
+      
+      // 1. Criar o pedido
+      const newOrder = await api.createOrder(cleanOrderData);
+      
+      // 2. Se houver sinal, criar o pagamento imediatamente
+      if (downPayment && downPayment > 0) {
+          await api.addPayment(newOrder.id, {
+              amount: downPayment,
+              date: new Date().toISOString().split('T')[0],
+              note: 'Sinal / Entrada'
+          });
+      }
+
       setIsCreateModalOpen(false);
       fetchOrders();
     } catch (error) {
