@@ -2,8 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Read environment variables
-const supabaseUrl = 'https://wiwhuysfrbygnkrngkha.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpd2h1eXNmcmJ5Z25rcm5na2hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2MTc4NTQsImV4cCI6MjA4NTE5Mzg1NH0.7o53tVTyjv20hTwz1sqQ023viLA2oBdBv29qm8WvShs'
+const supabaseUrl = 'https://placeholder.supabase.co'
+const supabaseAnonKey = 'placeholder-key'
 
 // Error handling for missing configuration
 if (!supabaseUrl || !supabaseAnonKey) {
