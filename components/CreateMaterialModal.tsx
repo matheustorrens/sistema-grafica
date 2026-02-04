@@ -19,6 +19,42 @@ const UNITS = [
     'g', 'kg', 'ton'
 ];
 
+// Função para formatar valor monetário
+const formatCurrency = (value: string): string => {
+  const numbers = value.replace(/\D/g, '');
+  const amount = parseInt(numbers || '0', 10) / 100;
+  return amount.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+// Função para converter string formatada para número
+const parseCurrency = (value: string): number => {
+  const cleaned = value.replace(/\./g, '').replace(',', '.');
+  return parseFloat(cleaned) || 0;
+};
+
+// Função para validar unidade (apenas letras e alguns caracteres)
+const formatUnit = (value: string): string => {
+  // Remove números, permite apenas letras, espaços e alguns caracteres especiais
+  return value.replace(/[0-9]/g, '').slice(0, 20);
+};
+
+// Função para formatar quantidade (apenas números e ponto/vírgula decimal)
+const formatQuantity = (value: string): string => {
+  // Remove tudo exceto números, ponto e vírgula
+  let cleaned = value.replace(/[^\d.,]/g, '');
+  // Substitui vírgula por ponto
+  cleaned = cleaned.replace(',', '.');
+  // Remove pontos extras (mantém apenas o primeiro)
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    cleaned = parts[0] + '.' + parts.slice(1).join('');
+  }
+  return cleaned;
+};
+
 const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData }) => {
   const { suppliers, materialColumns } = useSettings(); 
   const [formData, setFormData] = useState({
@@ -48,8 +84,8 @@ const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, 
       setFormData({
         name: '',
         quantity: '',
-        currentQuantity: '0',
-        unit: 'un',
+        currentQuantity: '',
+        unit: '',
         estimatedCost: '',
         status: defaultStatus,
         supplierIds: []
@@ -58,6 +94,27 @@ const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, 
   }, [initialData, isOpen, materialColumns]);
 
   if (!isOpen) return null;
+
+  const handleQuantityChange = (field: 'quantity' | 'currentQuantity') => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatQuantity(e.target.value);
+    setFormData({...formData, [field]: formatted});
+  };
+
+  const handleUnitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatUnit(e.target.value);
+    setFormData({...formData, unit: formatted});
+  };
+
+  const handleCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numbers = value.replace(/\D/g, '');
+    if (numbers === '') {
+      setFormData({...formData, estimatedCost: ''});
+      return;
+    }
+    const formatted = formatCurrency(numbers);
+    setFormData({...formData, estimatedCost: formatted});
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,10 +126,10 @@ const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, 
 
     onSave({
       ...formData,
-      quantity: parseFloat(formData.quantity) || 0,
-      currentQuantity: parseFloat(formData.currentQuantity) || 0,
+      quantity: parseFloat(formData.quantity.replace(',', '.')) || 0,
+      currentQuantity: parseFloat(formData.currentQuantity.replace(',', '.')) || 0,
       status: finalStatus,
-      estimatedCost: parseFloat(formData.estimatedCost) || 0,
+      estimatedCost: parseCurrency(formData.estimatedCost),
       id: initialData?.id 
     });
   };
@@ -127,11 +184,11 @@ const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, 
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Qtd. Necessária</label>
                 <input 
                   required
-                  type="number"
-                  step="any"
+                  type="text"
+                  inputMode="decimal"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400"
                   value={formData.quantity}
-                  onChange={e => setFormData({...formData, quantity: e.target.value})}
+                  onChange={handleQuantityChange('quantity')}
                   placeholder="Ex: 500"
                 />
               </div>
@@ -140,11 +197,11 @@ const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, 
                <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Qtd. Atual</label>
                 <input 
-                  type="number" 
-                  step="any"
+                  type="text" 
+                  inputMode="decimal"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400"
                   value={formData.currentQuantity}
-                  onChange={e => setFormData({...formData, currentQuantity: e.target.value})}
+                  onChange={handleQuantityChange('currentQuantity')}
                   placeholder="Ex: 120"
                 />
               </div>
@@ -157,9 +214,10 @@ const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, 
                  <input 
                    type="text" 
                    list="units-list"
+                   maxLength={20}
                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400"
                    value={formData.unit}
-                   onChange={e => setFormData({...formData, unit: e.target.value})}
+                   onChange={handleUnitChange}
                    placeholder="Ex: folhas, litros, rolo"
                  />
                  <datalist id="units-list">
@@ -172,12 +230,11 @@ const MaterialModal: React.FC<MaterialModalProps> = ({ isOpen, onClose, onSave, 
           <div>
              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Custo Estimado (R$)</label>
              <input 
-               type="number" 
-               step="0.01"
-               min="0"
+               type="text" 
+               inputMode="numeric"
                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400"
                value={formData.estimatedCost}
-               onChange={e => setFormData({...formData, estimatedCost: e.target.value})}
+               onChange={handleCostChange}
                placeholder="0,00"
              />
           </div>
