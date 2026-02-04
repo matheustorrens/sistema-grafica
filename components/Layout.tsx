@@ -1,9 +1,11 @@
 
-import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Settings as SettingsIcon, Store, MessageCircle, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, ShoppingCart, Package, Settings as SettingsIcon, Store, MessageCircle, Users, LogOut } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
-import { IS_DEMO_MODE } from '../services/supabase/client';
+import { useAuth } from '../context/AuthContext';
+import { signOut } from '@/shared/services/supabase/auth';
+import { IS_DEMO_MODE } from '@/shared/services/supabase/client';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,10 +13,25 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { companyName, logoUrl } = useSettings();
+  const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Check if current page should use full width (Materials page)
   const isFullWidthPage = location.pathname === '/materials';
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut();
+      navigate('/signin', { replace: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-200 overflow-hidden flex-col">
@@ -113,7 +130,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </nav>
 
-          <div className="p-4 border-t border-slate-800">
+          <div className="p-4 border-t border-slate-800 space-y-2">
             <NavLink
               to="/settings"
               className={({ isActive }) =>
@@ -125,6 +142,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <SettingsIcon size={20} />
               Configurações
             </NavLink>
+
+            {/* User Info & Logout */}
+            <div className="pt-2 border-t border-slate-800 mt-2">
+              {user && (
+                <div className="px-4 py-2 mb-2">
+                  <p className="text-xs text-slate-500 truncate" title={user.email || ''}>
+                    {user.email}
+                  </p>
+                </div>
+              )}
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-slate-400 hover:bg-red-500/10 hover:text-red-400 w-full disabled:opacity-50"
+              >
+                <LogOut size={20} />
+                {loggingOut ? 'Saindo...' : 'Sair'}
+              </button>
+            </div>
           </div>
         </aside>
 

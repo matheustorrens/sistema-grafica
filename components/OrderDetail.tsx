@@ -9,6 +9,15 @@ import {
 } from '../services/dataService';
 import { ArrowLeft, Printer, CreditCard, Plus, Calendar, CheckCircle } from 'lucide-react';
 
+// Função utilitária para formatar data brasileira sem problemas de timezone
+const formatDateBR = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Não definido';
+  const datePart = dateString.split('T')[0];
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return 'Data inválida';
+  return `${day}/${month}/${year}`;
+};
+
 interface OrderDetailProps {
   order: Order;
   payments: Payment[];
@@ -124,13 +133,11 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
                 <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                         <p className="text-slate-500">Data de Criação</p>
-                        <p className="font-medium text-slate-900">{new Date(order.createdAt).toLocaleDateString()}</p>
+                        <p className="font-medium text-slate-900">{formatDateBR(order.createdAt)}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Prazo de Entrega</p>
-                        <p className="font-medium text-slate-900">
-                            {order.deadline ? new Date(order.deadline).toLocaleDateString() : 'Não definido'}
-                        </p>
+                        <p className="font-medium text-slate-900">{formatDateBR(order.deadline)}</p>
                     </div>
                 </div>
             </div>

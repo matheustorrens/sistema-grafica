@@ -9,6 +9,25 @@ import ManageStatusModal from '../components/ManageStatusModal';
 import ConfirmModal from '../components/ConfirmModal'; 
 import { useSettings } from '../context/SettingsContext';
 
+// Função utilitária para formatar data brasileira sem problemas de timezone
+const formatDateBR = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Não definido';
+  // Pega apenas a parte da data (YYYY-MM-DD) e divide
+  const datePart = dateString.split('T')[0];
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return 'Data inválida';
+  return `${day}/${month}/${year}`;
+};
+
+// Função para obter timestamp para ordenação
+const getDateTimestamp = (dateString: string | null | undefined): number => {
+  if (!dateString) return 0;
+  const datePart = dateString.split('T')[0];
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return 0;
+  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).getTime();
+};
+
 type SortOption = 'PENDING_FIRST' | 'DEADLINE_ASC' | 'DEADLINE_DESC';
 
 const Orders: React.FC = () => {
@@ -58,7 +77,21 @@ const Orders: React.FC = () => {
 
   const handleCreateOrder = async (orderData: any) => {
     try {
-      await api.createOrder(orderData);
+      // Separar o 'downPayment' (sinal) dos dados do pedido
+      const { downPayment, ...cleanOrderData } = orderData;
+      
+      // 1. Criar o pedido
+      const newOrder = await api.createOrder(cleanOrderData);
+      
+      // 2. Se houver sinal, criar o pagamento imediatamente
+      if (downPayment && downPayment > 0) {
+        await api.addPayment(newOrder.id, {
+          amount: downPayment,
+          date: new Date().toISOString().split('T')[0],
+          note: 'Sinal / Entrada'
+        });
+      }
+      
       setIsCreateModalOpen(false);
       fetchOrders();
     } catch (error) {
@@ -213,11 +246,11 @@ const Orders: React.FC = () => {
       return order.status === filterStatus;
   }).sort((a, b) => {
       if (sortBy === 'DEADLINE_ASC') {
-          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+          return getDateTimestamp(a.deadline) - getDateTimestamp(b.deadline);
       }
 
       if (sortBy === 'DEADLINE_DESC') {
-          return new Date(b.deadline).getTime() - new Date(a.deadline).getTime();
+          return getDateTimestamp(b.deadline) - getDateTimestamp(a.deadline);
       }
 
       const pendingA = calculatePending(a) > 0.01;
@@ -357,9 +390,11 @@ const Orders: React.FC = () => {
                             </span>
                         </div>
                         <p className="text-gray-500 dark:text-gray-400 text-sm mb-2 truncate" title={order.description}>{order.description}</p>
-                        <p className="text-gray-400 dark:text-gray-500 text-xs">
-                            Entrega: {new Date(order.deadline).toLocaleDateString('pt-BR')}
-                        </p>
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-400 dark:text-gray-500">
+                            <span>Criado: {new Date(order.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>•</span>
+                            <span>Entrega: {formatDateBR(order.deadline)}</span>
+                        </div>
                     </div>
 
                     {/* Financial Stats */}

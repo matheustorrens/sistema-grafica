@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, './'),
+          '@': path.resolve(__dirname, './src'),
           // Force single react instance to avoid "Cannot read properties of null (reading 'useId')"
           'react': path.resolve(__dirname, 'node_modules/react'),
           'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),

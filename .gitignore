@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Environment files (contêm credenciais sensíveis)
+.env
+.env.local
+.env.production
+.env.staging
+.env.demo
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

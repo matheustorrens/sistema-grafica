@@ -7,6 +7,20 @@ import { ArrowLeft, Calendar, FileText, CreditCard, PlusCircle, Check, Pencil, M
 import ConfirmModal from '../components/ConfirmModal';
 import { useDropzone } from 'react-dropzone';
 
+// Função utilitária para formatar data brasileira sem problemas de timezone
+const formatDateBR = (dateString: string | null | undefined, long: boolean = false): string => {
+  if (!dateString) return 'Não definido';
+  const datePart = dateString.split('T')[0];
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return 'Data inválida';
+  
+  if (long) {
+    const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    return `${parseInt(day)} de ${months[parseInt(month) - 1]} de ${year}`;
+  }
+  return `${day}/${month}/${year}`;
+};
+
 const OrderDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -524,7 +538,7 @@ const OrderDetails: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-gray-100 dark:border-slate-700">
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-8 pt-8 border-t border-gray-100 dark:border-slate-700">
             <div className="flex items-start gap-4">
                 <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg text-blue-600 dark:text-blue-400">
                     <FileText size={20} />
@@ -535,12 +549,21 @@ const OrderDetails: React.FC = () => {
                 </div>
             </div>
             <div className="flex items-start gap-4">
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded-lg text-emerald-600 dark:text-emerald-400">
+                    <Clock size={20} />
+                </div>
+                <div>
+                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Data de Criação</span>
+                    <p className="text-gray-700 dark:text-slate-300 font-medium">{new Date(order.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+            </div>
+            <div className="flex items-start gap-4">
                 <div className="bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg text-amber-600 dark:text-amber-400">
                     <Calendar size={20} />
                 </div>
                 <div>
                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Prazo de Entrega</span>
-                    <p className="text-gray-700 dark:text-slate-300 font-medium">{new Date(order.deadline).toLocaleDateString('pt-BR', { dateStyle: 'long' })}</p>
+                    <p className="text-gray-700 dark:text-slate-300 font-medium">{formatDateBR(order.deadline, true)}</p>
                 </div>
             </div>
             <div className="flex items-start gap-4">
