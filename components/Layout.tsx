@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Settings as SettingsIcon, Store, MessageCircle, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Settings as SettingsIcon, Store, MessageCircle, Users, LogOut, FileText } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { signOut } from '@/shared/services/supabase/auth';
@@ -88,6 +88,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               <ShoppingCart size={20} />
               Pedidos
+            </NavLink>
+            <NavLink
+              to="/quotes"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  isActive ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`
+              }
+            >
+              <FileText size={20} />
+              Orçamentos
             </NavLink>
             <NavLink
               to="/materials"

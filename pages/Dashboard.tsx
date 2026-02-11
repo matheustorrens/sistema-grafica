@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Order, OrderStatus, Material, MaterialStatus, Supplier } from '../types';
+import { Order, OrderStatus, Material, MaterialStatus, Supplier, RevenueAdjustment } from '../types';
 import { api } from '../services/api';
 import { useSettings } from '../context/SettingsContext';
 import { DollarSign, Clock, AlertCircle, CheckCircle2, Calendar, TrendingUp, AlertTriangle, Package, MessageCircle, X, Moon, Sun, TrendingDown } from 'lucide-react';
@@ -9,6 +9,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
     PieChart, Pie, Cell, Legend 
 } from 'recharts';
+import RevenueAdjustmentModal from '../components/RevenueAdjustmentModal';
 
 type DateFilterType = '7D' | '30D' | '6M' | '1Y' | 'CUSTOM';
 
@@ -29,6 +30,10 @@ const Dashboard: React.FC = () => {
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Revenue Adjustment Modal State
+  const [showRevenueModal, setShowRevenueModal] = useState(false);
+  const [revenueAdjustments, setRevenueAdjustments] = useState<RevenueAdjustment[]>([]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -46,6 +51,51 @@ const Dashboard: React.FC = () => {
     };
     fetchData();
   }, []);
+
+  // --- Calculate filter date range ---
+  const filterDateRange = useMemo(() => {
+    const now = new Date();
+    let startDate: string;
+    let endDate: string = now.toISOString().split('T')[0];
+
+    if (dateFilter === 'CUSTOM' && customStartDate && customEndDate) {
+      startDate = customStartDate;
+      endDate = customEndDate;
+    } else {
+      const daysMap: Record<DateFilterType, number> = {
+        '7D': 7,
+        '30D': 30,
+        '6M': 180,
+        '1Y': 365,
+        'CUSTOM': 30
+      };
+      const days = daysMap[dateFilter] || 30;
+      const start = new Date(now);
+      start.setDate(now.getDate() - days);
+      startDate = start.toISOString().split('T')[0];
+    }
+
+    return { startDate, endDate };
+  }, [dateFilter, customStartDate, customEndDate]);
+
+  // --- Fetch revenue adjustments ---
+  const fetchRevenueAdjustments = async () => {
+    try {
+      const adjustments = await api.getRevenueAdjustmentsByDateRange(
+        filterDateRange.startDate,
+        filterDateRange.endDate
+      );
+      setRevenueAdjustments(adjustments);
+    } catch (error) {
+      console.error('Failed to fetch revenue adjustments:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!loading) {
+      fetchRevenueAdjustments();
+    }
+  }, [loading, filterDateRange.startDate, filterDateRange.endDate]);
 
   // --- WhatsApp Logic ---
   const handleContactSupplier = (material: Material) => {
@@ -116,11 +166,45 @@ const Dashboard: React.FC = () => {
 
   const completedCount = orders.filter(o => o.status === OrderStatus.COMPLETED).length;
 
+  // --- Total Revenue Calculation (Orders + Adjustments within period) ---
+  const totalRevenueData = useMemo(() => {
+    // Calculate total from order TOTALS (not payments) within the filter period
+    let totalFromOrders = 0;
+    
+    orders.forEach(order => {
+      const orderDate = order.createdAt.split('T')[0];
+      if (orderDate >= filterDateRange.startDate && orderDate <= filterDateRange.endDate) {
+        totalFromOrders += order.totalAmount;
+      }
+    });
+
+    // Calculate adjustments totals
+    const totalAdded = revenueAdjustments
+      .filter(a => a.amount > 0)
+      .reduce((sum, a) => sum + a.amount, 0);
+    
+    const totalSubtracted = revenueAdjustments
+      .filter(a => a.amount < 0)
+      .reduce((sum, a) => sum + Math.abs(a.amount), 0);
+
+    const netAdjustment = totalAdded - totalSubtracted;
+    const totalRevenue = totalFromOrders + netAdjustment;
+
+    return {
+      totalFromOrders,
+      totalAdded,
+      totalSubtracted,
+      netAdjustment,
+      totalRevenue
+    };
+  }, [orders, revenueAdjustments, filterDateRange]);
+
   // --- Revenue Chart Data (Bar) ---
   const revenueChartData = useMemo(() => {
     const chartDataMap = new Map<string, number>();
     const now = new Date();
 
+    // Add payments from orders
     orders.forEach(order => {
         order.payments.forEach(payment => {
             const paymentDate = new Date(payment.date);
@@ -157,11 +241,47 @@ const Dashboard: React.FC = () => {
             }
         });
     });
+
+    // Add manual revenue adjustments
+    revenueAdjustments.forEach(adjustment => {
+        const adjustmentDate = new Date(adjustment.adjustmentDate + 'T00:00:00');
+        const [aYear, aMonth, aDay] = adjustment.adjustmentDate.split('-');
+        const dateStr = `${aDay}/${aMonth}`;
+        
+        let isValid = false;
+        
+        if (dateFilter === 'CUSTOM') {
+            if (customStartDate && customEndDate) {
+                const start = new Date(customStartDate);
+                const end = new Date(customEndDate);
+                end.setHours(23, 59, 59);
+                isValid = adjustmentDate >= start && adjustmentDate <= end;
+            } else {
+                isValid = true;
+            }
+        } else {
+            const diffTime = Math.abs(now.getTime() - adjustmentDate.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            switch (dateFilter) {
+                case '7D': isValid = diffDays <= 7; break;
+                case '30D': isValid = diffDays <= 30; break;
+                case '6M': isValid = diffDays <= 180; break;
+                case '1Y': isValid = diffDays <= 365; break;
+                default: isValid = true;
+            }
+        }
+
+        if (isValid) {
+            const current = chartDataMap.get(dateStr) || 0;
+            chartDataMap.set(dateStr, current + adjustment.amount);
+        }
+    });
     
     return Array.from(chartDataMap.entries())
       .map(([date, amount]) => ({ date, amount }))
       .reverse(); 
-  }, [orders, dateFilter, customStartDate, customEndDate]);
+  }, [orders, revenueAdjustments, dateFilter, customStartDate, customEndDate]);
 
   // --- Dynamic Status Chart Data (Donut) ---
   const statusChartData = useMemo(() => {
@@ -255,14 +375,24 @@ const Dashboard: React.FC = () => {
             <div className="bg-emerald-100 dark:bg-emerald-900/30 p-3 rounded-full text-emerald-600 dark:text-emerald-400">
                 <DollarSign size={24} />
             </div>
-            {/* UPDATED BADGE: Shows Yesterday's Absolute Value */}
-            <span className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1 ${
-                isGrowth
-                ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' 
-                : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
-            }`}>
-                Ontem: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(incomeYesterday)}
-            </span>
+            <div className="flex flex-col gap-1 items-end">
+              {/* UPDATED BADGE: Shows Yesterday's Absolute Value */}
+              <span className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1 ${
+                  isGrowth
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' 
+                  : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+              }`}>
+                  Ontem: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(incomeYesterday)}
+              </span>
+              {/* NEW BADGE: Receita Total (clickable) */}
+              <button
+                onClick={() => setShowRevenueModal(true)}
+                className="text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:shadow-md transition-all cursor-pointer border border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600 hover:scale-105"
+                title="Clique para ajustar receita manualmente"
+              >
+                  <span className="underline decoration-dotted">Receita Total</span>: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenueData.totalRevenue)}
+              </button>
+            </div>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Entrou Hoje</p>
@@ -543,6 +673,16 @@ const Dashboard: React.FC = () => {
               </div>
           </div>
       )}
+
+      {/* Revenue Adjustment Modal */}
+      <RevenueAdjustmentModal
+        isOpen={showRevenueModal}
+        onClose={() => setShowRevenueModal(false)}
+        onSave={() => fetchRevenueAdjustments()}
+        totalFromOrders={totalRevenueData.totalFromOrders}
+        filterStartDate={filterDateRange.startDate}
+        filterEndDate={filterDateRange.endDate}
+      />
     </div>
   );
 };

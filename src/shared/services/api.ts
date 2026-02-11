@@ -8,7 +8,7 @@
 import { IS_DEMO_MODE } from './supabase/client';
 import * as localStorageService from './localStorage';
 import * as supabaseService from './supabase';
-import { Order, Material, Payment, Supplier, MaterialStatus } from '@/shared/types';
+import { Order, Material, Payment, Supplier, MaterialStatus, RevenueAdjustment, CreateRevenueAdjustmentData } from '@/shared/types';
 
 export const api = {
   // ============================================
@@ -55,6 +55,39 @@ export const api = {
       return localStorageService.addLocalPayment(orderId, payment);
     }
     return supabaseService.addSupabasePayment(orderId, payment);
+  },
+
+  deletePayment: async (orderId: string, paymentId: string): Promise<Order> => {
+    if (IS_DEMO_MODE) {
+      throw new Error('Not implemented in demo mode');
+    }
+    return supabaseService.deleteSupabasePayment(orderId, paymentId);
+  },
+
+  // ============================================
+  // ORDER ITEMS
+  // ============================================
+
+  addOrderItem: async (orderId: string, item: { name: string; unitPrice: number; quantity?: number; description: string }): Promise<Order> => {
+    if (IS_DEMO_MODE) {
+      // For demo mode, we'll skip this for now
+      throw new Error('Not implemented in demo mode');
+    }
+    return supabaseService.addSupabaseOrderItem(orderId, item);
+  },
+
+  updateOrderItem: async (orderId: string, itemId: string, item: { name: string; unitPrice: number; quantity?: number; description: string }): Promise<Order> => {
+    if (IS_DEMO_MODE) {
+      throw new Error('Not implemented in demo mode');
+    }
+    return supabaseService.updateSupabaseOrderItem(orderId, itemId, item);
+  },
+
+  deleteOrderItem: async (orderId: string, itemId: string): Promise<Order> => {
+    if (IS_DEMO_MODE) {
+      throw new Error('Not implemented in demo mode');
+    }
+    return supabaseService.deleteSupabaseOrderItem(orderId, itemId);
   },
 
   // ============================================
@@ -126,6 +159,52 @@ export const api = {
       return localStorageService.deleteLocalSupplier(id);
     }
     return supabaseService.deleteSupabaseSupplier(id);
+  },
+
+  // ============================================
+  // REVENUE ADJUSTMENTS
+  // ============================================
+
+  getRevenueAdjustments: async (): Promise<RevenueAdjustment[]> => {
+    if (IS_DEMO_MODE) {
+      return localStorageService.getLocalRevenueAdjustments();
+    }
+    return supabaseService.getSupabaseRevenueAdjustments();
+  },
+
+  getRevenueAdjustmentsByDateRange: async (startDate: string, endDate: string): Promise<RevenueAdjustment[]> => {
+    if (IS_DEMO_MODE) {
+      return localStorageService.getLocalRevenueAdjustmentsByDateRange(startDate, endDate);
+    }
+    return supabaseService.getSupabaseRevenueAdjustmentsByDateRange(startDate, endDate);
+  },
+
+  getRevenueAdjustmentsHistory: async (): Promise<RevenueAdjustment[]> => {
+    if (IS_DEMO_MODE) {
+      return localStorageService.getLocalRevenueAdjustmentsHistory();
+    }
+    return supabaseService.getSupabaseRevenueAdjustmentsHistory();
+  },
+
+  createRevenueAdjustment: async (data: CreateRevenueAdjustmentData): Promise<RevenueAdjustment> => {
+    if (IS_DEMO_MODE) {
+      return localStorageService.createLocalRevenueAdjustment(data);
+    }
+    return supabaseService.createSupabaseRevenueAdjustment(data);
+  },
+
+  reverseRevenueAdjustment: async (adjustmentId: string): Promise<void> => {
+    if (IS_DEMO_MODE) {
+      return localStorageService.reverseLocalRevenueAdjustment(adjustmentId);
+    }
+    return supabaseService.reverseSupabaseRevenueAdjustment(adjustmentId);
+  },
+
+  calculateAdjustmentsTotals: async (startDate: string, endDate: string): Promise<{ totalAdded: number; totalSubtracted: number; netAdjustment: number }> => {
+    if (IS_DEMO_MODE) {
+      return localStorageService.calculateLocalAdjustmentsTotals(startDate, endDate);
+    }
+    return supabaseService.calculateSupabaseAdjustmentsTotals(startDate, endDate);
   }
 };
 

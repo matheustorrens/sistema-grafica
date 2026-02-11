@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Order, OrderStatus } from '../types';
 import { api } from '../services/api';
-import { Search, Filter, Plus, ChevronRight, MessageSquare, Send, X, Settings, MessageCircle, Trash2, ArrowUpDown, AlertTriangle, CreditCard, DollarSign } from 'lucide-react';
+import { Search, Plus, ChevronRight, MessageSquare, Send, X, MessageCircle, Trash2, ArrowUpDown, AlertTriangle, DollarSign, MoreVertical, FileText } from 'lucide-react';
 import CreateOrderModal from '../components/CreateOrderModal';
 import ManageStatusModal from '../components/ManageStatusModal';
 import ConfirmModal from '../components/ConfirmModal'; 
@@ -275,13 +275,6 @@ const Orders: React.FC = () => {
             <p className="text-gray-500 dark:text-gray-400 mt-1">Gerencie todos os pedidos da sua gráfica</p>
         </div>
         <div className="flex items-center gap-3">
-             <button 
-                onClick={() => setIsStatusModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 font-medium transition-colors"
-            >
-                <Settings size={18} />
-                Gerenciar Status
-            </button>
             <button 
                 onClick={() => setIsCreateModalOpen(true)}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20"
@@ -302,6 +295,73 @@ const Orders: React.FC = () => {
           </div>
       )}
 
+      {/* 2.5. Status Tabs Section */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {/* Tab: Todos */}
+          <button
+              onClick={() => setFilterStatus('ALL')}
+              className={`relative px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap ${
+                  filterStatus === 'ALL'
+                      ? 'text-indigo-600 dark:text-indigo-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+          >
+              <span className="flex items-center gap-2">
+                  Todos
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      filterStatus === 'ALL'
+                          ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+                  }`}>
+                      {orders.length}
+                  </span>
+              </span>
+              {filterStatus === 'ALL' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-full" />
+              )}
+          </button>
+
+          {/* Dynamic Status Tabs (max 6 to keep total at 7 with "Todos") */}
+          {orderStatuses.slice(0, 6).map((status) => {
+              const statusCount = orders.filter(o => o.status === status.label).length;
+              const isActive = filterStatus === status.label;
+              return (
+                  <button
+                      key={status.id}
+                      onClick={() => setFilterStatus(status.label)}
+                      className={`relative px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap ${
+                          isActive
+                              ? 'text-indigo-600 dark:text-indigo-400'
+                              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      }`}
+                  >
+                      <span className="flex items-center gap-2">
+                          {status.label}
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              isActive
+                                  ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                                  : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+                          }`}>
+                              {statusCount}
+                          </span>
+                      </span>
+                      {isActive && (
+                          <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-full" />
+                      )}
+                  </button>
+              );
+          })}
+
+          {/* Add/Manage Status Button */}
+          <button
+              onClick={() => setIsStatusModalOpen(true)}
+              className="ml-1 p-2 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors shadow-sm"
+              title="Gerenciar Status"
+          >
+              <Plus size={16} />
+          </button>
+      </div>
+
       {/* 3. Search and Filter Bar */}
       <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
@@ -315,44 +375,22 @@ const Orders: React.FC = () => {
             />
           </div>
 
-          <div className="flex gap-4">
-            <div className="relative min-w-[180px]">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <ArrowUpDown size={18} className="text-gray-500 dark:text-gray-400" />
-                </div>
-                <select 
-                    className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700 dark:text-gray-200 font-medium shadow-sm cursor-pointer"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as SortOption)}
-                >
-                    <option value="PENDING_FIRST">Prioridade Pagamento</option>
-                    <option value="DEADLINE_ASC">Prazo: Mais Próximo</option>
-                    <option value="DEADLINE_DESC">Prazo: Mais Distante</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
-                    <ChevronRight size={16} className="rotate-90" />
-                </div>
-            </div>
-
-            <div className="relative min-w-[180px]">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Filter size={18} className="text-gray-500 dark:text-gray-400" />
-                </div>
-                <select 
-                    className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700 dark:text-gray-200 font-medium shadow-sm cursor-pointer"
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                    <option value="ALL">Todos os Status</option>
-                    <option value="OPEN">Em Aberto</option>
-                    {orderStatuses.map(s => (
-                        <option key={s.id} value={s.label}>{s.label}</option>
-                    ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
-                    <ChevronRight size={16} className="rotate-90" />
-                </div>
-            </div>
+          <div className="relative min-w-[180px]">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <ArrowUpDown size={18} className="text-gray-500 dark:text-gray-400" />
+              </div>
+              <select 
+                  className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700 dark:text-gray-200 font-medium shadow-sm cursor-pointer"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+              >
+                  <option value="PENDING_FIRST">Prioridade Pagamento</option>
+                  <option value="DEADLINE_ASC">Prazo: Mais Próximo</option>
+                  <option value="DEADLINE_DESC">Prazo: Mais Distante</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+                  <ChevronRight size={16} className="rotate-90" />
+              </div>
           </div>
       </div>
 
@@ -370,11 +408,7 @@ const Orders: React.FC = () => {
                  <div 
                     key={order.id}
                     onClick={() => navigate(`/orders/${order.id}`)}
-                    className={`rounded-xl p-6 flex flex-col lg:flex-row items-center justify-between gap-6 hover:shadow-md transition-all cursor-pointer group ${
-                        isCompleted 
-                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30' 
-                        : 'bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700'
-                    }`}
+                    className="rounded-xl p-6 flex flex-col lg:flex-row items-center justify-between gap-6 hover:shadow-md hover:border-dashed hover:border-2 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all cursor-pointer bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700"
                  >
                     {/* Left Info */}
                     <div className="flex-1 min-w-0 w-full lg:w-auto text-center lg:text-left">
@@ -449,23 +483,42 @@ const Orders: React.FC = () => {
                             </div>
                          </div>
 
-                         {pending > 0.01 && (
+                         {/* Dropdown Menu */}
+                         <div className="relative group" onClick={(e) => e.stopPropagation()}>
                             <button 
-                                onClick={(e) => { e.stopPropagation(); handleSingleCharge(order); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg text-sm font-medium hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg transition-colors"
+                                title="Mais opções"
                             >
-                                <MessageCircle size={16} />
-                                Cobrar
+                                <MoreVertical size={18} />
                             </button>
-                         )}
-
-                         <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteRequest(order.id); }}
-                            className="p-2 text-red-600 dark:text-red-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-lg transition-colors"
-                            title="Excluir Pedido"
-                         >
-                             <Trash2 size={18} />
-                         </button>
+                            <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-20">
+                                <div className="py-1">
+                                    <button 
+                                        onClick={() => navigate(`/quotes?orderId=${order.id}`)}
+                                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                    >
+                                        <FileText size={16} className="text-purple-600 dark:text-purple-400" />
+                                        Gerar Orçamento
+                                    </button>
+                                    {pending > 0.01 && (
+                                        <button 
+                                            onClick={() => handleSingleCharge(order)}
+                                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                        >
+                                            <MessageCircle size={16} className="text-green-600 dark:text-green-400" />
+                                            Cobrar
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={() => handleDeleteRequest(order.id)}
+                                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    >
+                                        <Trash2 size={16} />
+                                        Excluir Pedido
+                                    </button>
+                                </div>
+                            </div>
+                         </div>
                     </div>
                  </div>
              );

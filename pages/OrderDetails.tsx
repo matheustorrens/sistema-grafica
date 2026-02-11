@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Order, OrderNote, OrderAttachment } from '../types';
+import { Order, OrderNote, OrderAttachment, OrderItem } from '../types';
 import { api } from '../services/api';
-import { ArrowLeft, Calendar, FileText, CreditCard, PlusCircle, Check, Pencil, MessageCircle, StickyNote, Clock, Trash2, Phone, Upload, Image as ImageIcon, Film, File as FileIcon, Download, Paperclip, Music, FileSpreadsheet, FileArchive, FileCode, Square, CheckSquare, X } from 'lucide-react';
+import { ArrowLeft, Calendar, FileText, CreditCard, PlusCircle, Check, Pencil, MessageCircle, StickyNote, Clock, Trash2, Phone, Upload, Image as ImageIcon, Film, File as FileIcon, Download, Paperclip, Music, FileSpreadsheet, FileArchive, FileCode, Square, CheckSquare, X, Package, Plus } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { useDropzone } from 'react-dropzone';
 
@@ -21,6 +21,22 @@ const formatDateBR = (dateString: string | null | undefined, long: boolean = fal
   return `${day}/${month}/${year}`;
 };
 
+// Função para formatar valor monetário
+const formatCurrency = (value: string): string => {
+  const numbers = value.replace(/\D/g, '');
+  const amount = parseInt(numbers || '0', 10) / 100;
+  return amount.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+// Função para converter string formatada para número
+const parseCurrency = (value: string): number => {
+  const cleaned = value.replace(/\./g, '').replace(',', '.');
+  return parseFloat(cleaned) || 0;
+};
+
 const OrderDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -31,6 +47,7 @@ const OrderDetails: React.FC = () => {
   const [isAddingPayment, setIsAddingPayment] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
+  const [paymentExceedsMax, setPaymentExceedsMax] = useState(false);
 
   // Inline Editing State
   const [editingField, setEditingField] = useState<'name' | 'phone' | null>(null);
@@ -48,6 +65,22 @@ const OrderDetails: React.FC = () => {
   const [attachmentToDelete, setAttachmentToDelete] = useState<string | null>(null);
   const [selectedAttachments, setSelectedAttachments] = useState<Set<string>>(new Set());
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  
+  // Payment Delete State
+  const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
+  
+  // Items State
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemPrice, setNewItemPrice] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('1');
+  const [newItemDescription, setNewItemDescription] = useState('');
+  const [editItemName, setEditItemName] = useState('');
+  const [editItemPrice, setEditItemPrice] = useState('');
+  const [editItemQuantity, setEditItemQuantity] = useState('1');
+  const [editItemDescription, setEditItemDescription] = useState('');
   
   // Preview Hover State
   const [hoveredAttachment, setHoveredAttachment] = useState<OrderAttachment | null>(null);
@@ -127,8 +160,15 @@ const OrderDetails: React.FC = () => {
     e.preventDefault();
     if (!order) return;
 
-    const amount = parseFloat(paymentAmount);
+    const amount = parseCurrency(paymentAmount);
     if (isNaN(amount) || amount <= 0) return;
+    
+    // Validar valor máximo
+    const totalPaidSoFar = order.payments.reduce((acc, p) => acc + p.amount, 0);
+    const remainingAmount = order.totalAmount - totalPaidSoFar;
+    if (amount > remainingAmount + 0.01) {
+      return; // O aviso já está visível abaixo do campo
+    }
 
     try {
       const updatedOrder = await api.addPayment(order.id, {
@@ -140,8 +180,22 @@ const OrderDetails: React.FC = () => {
       setIsAddingPayment(false);
       setPaymentAmount('');
       setPaymentNote('');
+      setPaymentExceedsMax(false);
     } catch (error) {
       console.error("Error adding payment", error);
+    }
+  };
+
+  const handleDeletePayment = async () => {
+    if (!order || !paymentToDelete) return;
+    
+    try {
+      const updatedOrder = await api.deletePayment(order.id, paymentToDelete);
+      setOrder(updatedOrder);
+    } catch (error) {
+      console.error("Error deleting payment", error);
+    } finally {
+      setPaymentToDelete(null);
     }
   };
 
@@ -597,109 +651,404 @@ const OrderDetails: React.FC = () => {
       {/* Main Grid: Financial + History & Attachments/Notes */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
-          {/* Column 1: Payment History & Add Payment */}
+          {/* Column 1: Items, Payment History */}
           <div className="space-y-6">
+              
+              {/* Order Items Section */}
               <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                      <CreditCard size={20} className="text-indigo-600 dark:text-indigo-400" />
-                      Histórico de Pagamentos
-                  </h3>
-                  
-                  <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-                      {order.payments.length === 0 ? (
-                          <div className="text-center py-10 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
-                             <p className="text-gray-400 dark:text-slate-500 text-sm italic">Nenhum pagamento registrado.</p>
+                  <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Package size={20} className="text-purple-600 dark:text-purple-400" />
+                          Itens do Pedido
+                      </h3>
+                      <div className="flex items-center gap-2">
+                          <button 
+                              onClick={() => navigate(`/quotes?orderId=${order.id}`)}
+                              className="flex items-center gap-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-all"
+                          >
+                              <FileText size={16} />
+                              Gerar Orçamento
+                          </button>
+                          {!isAddingItem && (
+                              <button 
+                                  onClick={() => setIsAddingItem(true)}
+                                  className="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95"
+                              >
+                                  <Plus size={16} />
+                                  Adicionar
+                              </button>
+                          )}
+                      </div>
+                  </div>
+
+                  {/* Add Item Form */}
+                  {isAddingItem && (
+                      <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800 animate-in slide-in-from-top-2 duration-200">
+                          <div className="space-y-3">
+                              <div className="flex gap-2">
+                                  <input 
+                                      type="text"
+                                      className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-gray-900 dark:text-white text-sm"
+                                      value={newItemName}
+                                      onChange={(e) => setNewItemName(e.target.value)}
+                                      placeholder="Nome do item"
+                                      autoFocus
+                                  />
+                                  <div className="w-16">
+                                      <input 
+                                          type="text"
+                                          inputMode="numeric"
+                                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-gray-900 dark:text-white text-sm text-center"
+                                          value={newItemQuantity}
+                                          onChange={(e) => {
+                                              const numbers = e.target.value.replace(/\D/g, '');
+                                              setNewItemQuantity(numbers || '1');
+                                          }}
+                                          placeholder="Qtd"
+                                          title="Quantidade"
+                                      />
+                                  </div>
+                                  <div className="w-28 relative">
+                                      <input 
+                                          type="text"
+                                          inputMode="numeric"
+                                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-gray-900 dark:text-white text-sm"
+                                          value={newItemPrice}
+                                          onChange={(e) => {
+                                              const numbers = e.target.value.replace(/\D/g, '');
+                                              if (numbers === '') { setNewItemPrice(''); return; }
+                                              setNewItemPrice(formatCurrency(numbers));
+                                          }}
+                                          placeholder="Valor un."
+                                      />
+                                  </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                  <input 
+                                      type="text"
+                                      className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-gray-900 dark:text-white text-sm"
+                                      value={newItemDescription}
+                                      onChange={(e) => setNewItemDescription(e.target.value)}
+                                      placeholder="Descrição (opcional)"
+                                  />
+                                  {parseInt(newItemQuantity, 10) > 1 && parseCurrency(newItemPrice) > 0 && (
+                                      <span className="text-xs text-green-600 dark:text-green-400 font-medium whitespace-nowrap">
+                                          = {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseCurrency(newItemPrice) * parseInt(newItemQuantity, 10))}
+                                      </span>
+                                  )}
+                              </div>
+                              <div className="flex gap-2">
+                                  <button 
+                                      onClick={async () => {
+                                          if (!newItemName.trim() || !newItemPrice) return;
+                                          try {
+                                              const updatedOrder = await api.addOrderItem(order.id, {
+                                                  name: newItemName.trim(),
+                                                  unitPrice: parseCurrency(newItemPrice),
+                                                  quantity: parseInt(newItemQuantity, 10) || 1,
+                                                  description: newItemDescription.trim()
+                                              });
+                                              setOrder(updatedOrder);
+                                              setNewItemName('');
+                                              setNewItemPrice('');
+                                              setNewItemQuantity('1');
+                                              setNewItemDescription('');
+                                              setIsAddingItem(false);
+                                          } catch (error) {
+                                              console.error('Error adding item:', error);
+                                          }
+                                      }}
+                                      className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium text-sm transition-all"
+                                  >
+                                      Salvar
+                                  </button>
+                                  <button 
+                                      onClick={() => { setIsAddingItem(false); setNewItemName(''); setNewItemPrice(''); setNewItemQuantity('1'); setNewItemDescription(''); }}
+                                      className="px-4 py-2 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-300 rounded-lg font-medium text-sm hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+                                  >
+                                      Cancelar
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+
+                  {/* Items List */}
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                      {(!order.items || order.items.length === 0) ? (
+                          <div className="text-center py-8 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
+                              <p className="text-gray-400 dark:text-slate-500 text-sm italic">Nenhum item cadastrado.</p>
                           </div>
                       ) : (
-                          order.payments.map((payment) => (
-                              <div key={payment.id} className="flex justify-between items-center p-4 bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all">
-                                  <div>
-                                      <p className="font-extrabold text-gray-900 dark:text-white text-lg">
-                                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payment.amount)}
-                                      </p>
-                                      <p className="text-xs text-gray-500 dark:text-slate-400 font-medium">{new Date(payment.date).toLocaleDateString('pt-BR')}</p>
-                                  </div>
-                                  <div className="text-right">
-                                      {payment.note && <span className="text-xs text-gray-500 dark:text-slate-400 block max-w-[150px] truncate mb-1" title={payment.note}>{payment.note}</span>}
-                                      <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded flex items-center justify-end gap-1">
-                                          <Check size={10} /> CONFIRMADO
-                                      </span>
-                                  </div>
+                          order.items.map((item) => (
+                              <div key={item.id} className="p-4 bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-purple-200 dark:hover:border-purple-800 transition-all">
+                                  {editingItemId === item.id ? (
+                                      <div className="space-y-2">
+                                          <div className="flex gap-2">
+                                              <input 
+                                                  type="text"
+                                                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white text-sm"
+                                                  value={editItemName}
+                                                  onChange={(e) => setEditItemName(e.target.value)}
+                                                  autoFocus
+                                              />
+                                              <div className="w-16">
+                                                  <input 
+                                                      type="text"
+                                                      inputMode="numeric"
+                                                      className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white text-sm text-center"
+                                                      value={editItemQuantity}
+                                                      onChange={(e) => {
+                                                          const numbers = e.target.value.replace(/\D/g, '');
+                                                          setEditItemQuantity(numbers || '1');
+                                                      }}
+                                                      placeholder="Qtd"
+                                                      title="Quantidade"
+                                                  />
+                                              </div>
+                                              <div className="w-28 relative">
+                                                  <input 
+                                                      type="text"
+                                                      inputMode="numeric"
+                                                      className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white text-sm"
+                                                      value={editItemPrice}
+                                                      onChange={(e) => {
+                                                          const numbers = e.target.value.replace(/\D/g, '');
+                                                          if (numbers === '') { setEditItemPrice(''); return; }
+                                                          setEditItemPrice(formatCurrency(numbers));
+                                                      }}
+                                                      placeholder="Valor un."
+                                                  />
+                                              </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                              <input 
+                                                  type="text"
+                                                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-900 dark:text-white text-sm"
+                                                  value={editItemDescription}
+                                                  onChange={(e) => setEditItemDescription(e.target.value)}
+                                                  placeholder="Descrição (opcional)"
+                                              />
+                                              {parseInt(editItemQuantity, 10) > 1 && parseCurrency(editItemPrice) > 0 && (
+                                                  <span className="text-xs text-purple-600 dark:text-purple-400 font-medium whitespace-nowrap">
+                                                      = {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseCurrency(editItemPrice) * parseInt(editItemQuantity, 10))}
+                                                  </span>
+                                              )}
+                                          </div>
+                                          <div className="flex gap-2">
+                                              <button 
+                                                  onClick={async () => {
+                                                      if (!editItemName.trim() || !editItemPrice) return;
+                                                      try {
+                                                          const updatedOrder = await api.updateOrderItem(order.id, item.id, {
+                                                              name: editItemName.trim(),
+                                                              unitPrice: parseCurrency(editItemPrice),
+                                                              quantity: parseInt(editItemQuantity, 10) || 1,
+                                                              description: editItemDescription.trim()
+                                                          });
+                                                          setOrder(updatedOrder);
+                                                          setEditingItemId(null);
+                                                      } catch (error) {
+                                                          console.error('Error updating item:', error);
+                                                      }
+                                                  }}
+                                                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-1.5 rounded-lg font-medium text-sm"
+                                              >
+                                                  Salvar
+                                              </button>
+                                              <button 
+                                                  onClick={() => setEditingItemId(null)}
+                                                  className="px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-300 rounded-lg font-medium text-sm"
+                                              >
+                                                  Cancelar
+                                              </button>
+                                          </div>
+                                      </div>
+                                  ) : (
+                                      <div className="flex justify-between items-start">
+                                          <div className="flex-1">
+                                              <div className="flex items-center gap-2">
+                                                  <p className="font-bold text-gray-900 dark:text-white">{item.name || item.description}</p>
+                                                  {(item.quantity || 1) > 1 && (
+                                                      <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full font-medium">
+                                                          x{item.quantity}
+                                                      </span>
+                                                  )}
+                                              </div>
+                                              {item.description && item.name && (
+                                                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.description}</p>
+                                              )}
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                              <span className="font-bold text-purple-600 dark:text-purple-400">
+                                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitPrice * (item.quantity || 1))}
+                                              </span>
+                                              <button 
+                                                  onClick={() => {
+                                                      setEditingItemId(item.id);
+                                                      setEditItemName(item.name || item.description);
+                                                      setEditItemPrice(item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                                                      setEditItemDescription(item.name ? item.description : '');
+                                                      setEditItemQuantity(String(item.quantity || 1));
+                                                  }}
+                                                  className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                              >
+                                                  <Pencil size={14} />
+                                              </button>
+                                              <button 
+                                                  onClick={() => setItemToDelete(item.id)}
+                                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                              >
+                                                  <Trash2 size={14} />
+                                              </button>
+                                          </div>
+                                      </div>
+                                  )}
                               </div>
                           ))
                       )}
                   </div>
+
+                  {/* Items Total */}
+                  {order.items && order.items.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 flex justify-between items-center">
+                          <span className="font-medium text-gray-600 dark:text-slate-400">Total dos Itens:</span>
+                          <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                  order.items.reduce((acc, item) => acc + (item.unitPrice * (item.quantity || 1)), 0)
+                              )}
+                          </span>
+                      </div>
+                  )}
               </div>
 
-              {/* Add Payment Action */}
+              {/* Payment History */}
               <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Novo Lançamento Financeiro</h3>
-                  
-                  {!isAddingPayment ? (
-                      <div className="h-full flex flex-col items-center justify-center py-6 text-center space-y-4">
-                          <p className="text-gray-500 dark:text-slate-400 text-sm max-w-[200px]">Registre sinais ou pagamentos complementares aqui.</p>
+                  <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <CreditCard size={20} className="text-indigo-600 dark:text-indigo-400" />
+                          Histórico de Pagamentos
+                      </h3>
+                      {remaining > 0 && !isAddingPayment && (
                           <button 
-                            onClick={() => setIsAddingPayment(true)}
-                            className="w-full sm:w-auto bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white px-8 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-900/10 font-bold active:scale-95"
-                            disabled={remaining <= 0}
+                              onClick={() => setIsAddingPayment(true)}
+                              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95"
                           >
-                              {remaining <= 0 ? (
-                                  <>
-                                    <Check size={20} /> Totalmente Pago
-                                  </>
-                              ) : (
-                                  <>
-                                    <PlusCircle size={20} /> Adicionar Pagamento
-                                  </>
-                              )}
+                              <PlusCircle size={16} />
+                              Adicionar
                           </button>
-                      </div>
-                  ) : (
-                      <form onSubmit={handleAddPayment} className="space-y-5 animate-in slide-in-from-top-4 duration-300">
-                          <div>
-                              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Valor do Lançamento (R$)</label>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
-                                <input 
-                                    type="number" 
-                                    step="0.01"
-                                    max={remaining}
-                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white font-bold text-lg"
-                                    value={paymentAmount}
-                                    onChange={(e) => setPaymentAmount(e.target.value)}
-                                    placeholder={`Ex: ${remaining.toFixed(2)}`}
-                                    autoFocus
-                                    required
-                                />
+                      )}
+                      {remaining <= 0 && (
+                          <span className="flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-medium">
+                              <Check size={16} />
+
+                              Pago
+                          </span>
+                      )}
+                  </div>
+                  
+                  {/* Add Payment Form (inline) */}
+                  {isAddingPayment && (
+                      <form onSubmit={handleAddPayment} className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800 animate-in slide-in-from-top-2 duration-200">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Valor (R$)</label>
+                                  <div className="relative">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">R$</span>
+                                      <input 
+                                          type="text"
+                                          inputMode="numeric"
+                                          className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white font-bold"
+                                          value={paymentAmount}
+                                          onChange={(e) => {
+                                              const numbers = e.target.value.replace(/\D/g, '');
+                                              if (numbers === '') { 
+                                                  setPaymentAmount(''); 
+                                                  setPaymentExceedsMax(false);
+                                                  return; 
+                                              }
+                                              const formatted = formatCurrency(numbers);
+                                              setPaymentAmount(formatted);
+                                              
+                                              // Verificar se excede o máximo
+                                              const amount = parseCurrency(formatted);
+                                              const totalPaidSoFar = order.payments.reduce((acc, p) => acc + p.amount, 0);
+                                              const remainingAmount = order.totalAmount - totalPaidSoFar;
+                                              setPaymentExceedsMax(amount > remainingAmount + 0.01);
+                                          }}
+                                          placeholder={remaining.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          autoFocus
+                                          required
+                                      />
+                                  </div>
+                                  {paymentExceedsMax && (
+                                      <p className="text-xs text-amber-600 dark:text-amber-500 mt-1.5 font-medium flex items-center gap-1">
+                                          ⚠️ Valor máximo permitido: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remaining)}
+                                      </p>
+                                  )}
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Método</label>
+                                  <input 
+                                      type="text" 
+                                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700 dark:text-gray-200"
+                                      value={paymentNote}
+                                      onChange={(e) => setPaymentNote(e.target.value)}
+                                      placeholder="PIX, Cartão..."
+                                  />
                               </div>
                           </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Método / Descrição</label>
-                              <input 
-                                type="text" 
-                                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700 dark:text-gray-200"
-                                value={paymentNote}
-                                onChange={(e) => setPaymentNote(e.target.value)}
-                                placeholder="Ex: PIX, Cartão, Sinal..."
-                              />
-                          </div>
-                          <div className="flex gap-3 pt-2">
+                          <div className="flex gap-2">
                               <button 
-                                type="submit" 
-                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold transition-all shadow-md active:scale-95"
+                                  type="submit" 
+                                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-medium transition-all text-sm active:scale-95"
                               >
-                                  Salvar Lançamento
+                                  Salvar
                               </button>
                               <button 
-                                type="button" 
-                                onClick={() => setIsAddingPayment(false)}
-                                className="flex-1 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600 py-3 rounded-xl font-medium transition-colors"
+                                  type="button" 
+                                  onClick={() => setIsAddingPayment(false)}
+                                  className="px-4 py-2 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600 rounded-lg font-medium transition-colors text-sm"
                               >
                                   Cancelar
                               </button>
                           </div>
                       </form>
                   )}
+
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                      {order.payments.length === 0 ? (
+                          <div className="text-center py-10 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
+                             <p className="text-gray-400 dark:text-slate-500 text-sm italic">Nenhum pagamento registrado.</p>
+                          </div>
+                      ) : (
+                          order.payments.map((payment) => (
+                              <div key={payment.id} className="flex justify-between items-center p-4 bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group">
+                                  <div>
+                                      <p className="font-extrabold text-gray-900 dark:text-white text-lg">
+                                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payment.amount)}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-slate-400 font-medium">{new Date(payment.date).toLocaleDateString('pt-BR')}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                      <div className="text-right">
+                                          {payment.note && <span className="text-xs text-gray-500 dark:text-slate-400 block max-w-[150px] truncate mb-1" title={payment.note}>{payment.note}</span>}
+                                          <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded flex items-center justify-end gap-1">
+                                              <Check size={10} /> CONFIRMADO
+                                          </span>
+                                      </div>
+                                      <button 
+                                          onClick={() => setPaymentToDelete(payment.id)}
+                                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                          title="Excluir pagamento"
+                                      >
+                                          <Trash2 size={14} />
+                                      </button>
+                                  </div>
+                              </div>
+                          ))
+                      )}
+                  </div>
               </div>
           </div>
 
@@ -939,6 +1288,36 @@ const OrderDetails: React.FC = () => {
         title="Excluir Múltiplos Arquivos"
         description={`Você selecionou ${selectedAttachments.size} arquivos. Deseja excluí-los permanentemente? Esta ação não pode ser desfeita.`}
         confirmText="Excluir Selecionados"
+        variant="danger"
+      />
+
+      <ConfirmModal 
+        isOpen={!!itemToDelete}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={async () => {
+            if (!itemToDelete || !order) return;
+            try {
+                const updatedOrder = await api.deleteOrderItem(order.id, itemToDelete);
+                setOrder(updatedOrder);
+            } catch (error) {
+                console.error('Error deleting item:', error);
+            } finally {
+                setItemToDelete(null);
+            }
+        }}
+        title="Excluir Item"
+        description="Tem certeza que deseja excluir este item? O valor total do pedido será atualizado automaticamente."
+        confirmText="Excluir Item"
+        variant="danger"
+      />
+
+      <ConfirmModal 
+        isOpen={!!paymentToDelete}
+        onClose={() => setPaymentToDelete(null)}
+        onConfirm={handleDeletePayment}
+        title="Excluir Pagamento"
+        description="Tem certeza que deseja excluir este pagamento? Esta ação não pode ser desfeita."
+        confirmText="Excluir Pagamento"
         variant="danger"
       />
     </div>

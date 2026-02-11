@@ -26,6 +26,7 @@ const mapOrderFromDB = (row: any): Order => {
     })),
     items: (row.order_items || []).map((i: any) => ({
       id: i.id,
+      name: i.name,
       description: i.description,
       quantity: i.quantity,
       unitPrice: i.unit_price
@@ -117,12 +118,16 @@ export const createSupabaseOrder = async (orderData: Partial<Order>): Promise<Or
     if (orderData.items && orderData.items.length > 0) {
       const itemsToInsert = orderData.items.map(item => ({
         order_id: newOrder.id,
-        description: item.description,
-        quantity: item.quantity,
+        name: item.name || '',
+        description: item.description || '',
+        quantity: item.quantity || 1,
         unit_price: item.unitPrice,
         tenant_id: tenantId
       }));
-      await supabase.from('order_items').insert(itemsToInsert);
+      const { error: itemsError } = await supabase.from('order_items').insert(itemsToInsert);
+      if (itemsError) {
+        console.error('Error inserting order items:', itemsError);
+      }
     }
 
     return (await getSupabaseOrderById(newOrder.id)) as Order;
@@ -225,6 +230,122 @@ export const addSupabasePayment = async (orderId: string, payment: Omit<Payment,
     return freshOrder;
   } catch (error) {
     console.error('Error adding payment:', error);
+    throw error;
+  }
+};
+
+export const deleteSupabasePayment = async (orderId: string, paymentId: string): Promise<Order> => {
+  try {
+    const { error } = await supabase
+      .from('payments')
+      .delete()
+      .eq('id', paymentId);
+
+    if (error) throw error;
+
+    const freshOrder = await getSupabaseOrderById(orderId);
+    if (!freshOrder) throw new Error("Order not found after deleting payment");
+
+    return freshOrder;
+  } catch (error) {
+    console.error('Error deleting payment:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// ORDER ITEMS CRUD
+// ============================================
+
+// Helper to generate description from items
+const generateDescriptionFromItems = (items: { name?: string; description?: string }[]): string => {
+  return items
+    .map(i => i.name || i.description || '')
+    .filter(Boolean)
+    .join(' / ');
+};
+
+export const addSupabaseOrderItem = async (orderId: string, item: { name: string; unitPrice: number; quantity?: number; description: string }): Promise<Order> => {
+  try {
+    const tenantId = await getCurrentTenantId();
+    
+    const { error } = await supabase
+      .from('order_items')
+      .insert({
+        order_id: orderId,
+        name: item.name,
+        description: item.description,
+        quantity: item.quantity || 1,
+        unit_price: item.unitPrice,
+        tenant_id: tenantId
+      });
+
+    if (error) throw error;
+
+    // Update order total and description
+    const freshOrder = await getSupabaseOrderById(orderId);
+    if (!freshOrder) throw new Error("Order not found");
+    
+    const newTotal = freshOrder.items.reduce((acc, i) => acc + (i.unitPrice * (i.quantity || 1)), 0);
+    const newDescription = generateDescriptionFromItems(freshOrder.items);
+    await supabase.from('orders').update({ total_amount: newTotal, description: newDescription }).eq('id', orderId);
+
+    return (await getSupabaseOrderById(orderId))!;
+  } catch (error) {
+    console.error('Error adding order item:', error);
+    throw error;
+  }
+};
+
+export const updateSupabaseOrderItem = async (orderId: string, itemId: string, item: { name: string; unitPrice: number; quantity?: number; description: string }): Promise<Order> => {
+  try {
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        name: item.name,
+        description: item.description,
+        quantity: item.quantity || 1,
+        unit_price: item.unitPrice
+      })
+      .eq('id', itemId);
+
+    if (error) throw error;
+
+    // Update order total and description
+    const freshOrder = await getSupabaseOrderById(orderId);
+    if (!freshOrder) throw new Error("Order not found");
+    
+    const newTotal = freshOrder.items.reduce((acc, i) => acc + (i.unitPrice * (i.quantity || 1)), 0);
+    const newDescription = generateDescriptionFromItems(freshOrder.items);
+    await supabase.from('orders').update({ total_amount: newTotal, description: newDescription }).eq('id', orderId);
+
+    return (await getSupabaseOrderById(orderId))!;
+  } catch (error) {
+    console.error('Error updating order item:', error);
+    throw error;
+  }
+};
+
+export const deleteSupabaseOrderItem = async (orderId: string, itemId: string): Promise<Order> => {
+  try {
+    const { error } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('id', itemId);
+
+    if (error) throw error;
+
+    // Update order total and description
+    const freshOrder = await getSupabaseOrderById(orderId);
+    if (!freshOrder) throw new Error("Order not found");
+    
+    const newTotal = freshOrder.items.reduce((acc, i) => acc + (i.unitPrice * (i.quantity || 1)), 0);
+    const newDescription = generateDescriptionFromItems(freshOrder.items);
+    await supabase.from('orders').update({ total_amount: newTotal, description: newDescription || 'Sem itens' }).eq('id', orderId);
+
+    return freshOrder;
+  } catch (error) {
+    console.error('Error deleting order item:', error);
     throw error;
   }
 };

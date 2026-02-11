@@ -21,6 +21,7 @@ const Materials = lazy(() => import('../../pages/Materials'));
 const Suppliers = lazy(() => import('../../pages/Suppliers'));
 const Settings = lazy(() => import('../../pages/Settings'));
 const Automation = lazy(() => import('../../pages/Automation'));
+const Quotes = lazy(() => import('../../pages/Quotes'));
 
 // Loading spinner component
 const PageLoader: React.FC = () => (
@@ -56,6 +57,9 @@ const AppRoutes: React.FC = () => {
           {/* Orders */}
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetails />} />
+
+          {/* Quotes */}
+          <Route path="quotes" element={<Quotes />} />
 
           {/* Materials */}
           <Route path="materials" element={<Materials />} />

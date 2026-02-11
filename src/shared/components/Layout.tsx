@@ -13,7 +13,8 @@ import {
   Store, 
   MessageCircle, 
   Users, 
-  LogOut 
+  LogOut,
+  FileText
 } from 'lucide-react';
 import { useSettings } from '@/shared/context/SettingsContext';
 import { useAuth } from '@/shared/context/AuthContext';
@@ -93,6 +94,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavLink to="/orders" className={navLinkClass}>
               <ShoppingCart size={20} />
               Pedidos
+            </NavLink>
+            <NavLink to="/quotes" className={navLinkClass}>
+              <FileText size={20} />
+              Orçamentos
             </NavLink>
             <NavLink to="/materials" className={navLinkClass}>
               <Package size={20} />

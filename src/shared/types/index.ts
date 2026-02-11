@@ -43,6 +43,7 @@ export interface Payment {
 
 export interface OrderItem {
   id: string;
+  name?: string;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -113,6 +114,28 @@ export interface Supplier {
   name: string;
   phone: string;
   tags?: string[];
+}
+
+// ============================================
+// Revenue Adjustment Types
+// ============================================
+
+export interface RevenueAdjustment {
+  id: string;
+  tenantId?: string;
+  adjustmentDate: string;
+  amount: number;
+  note?: string;
+  createdAt: string;
+  isReversed: boolean;
+  reversedAt?: string;
+  reversedById?: string;
+}
+
+export interface CreateRevenueAdjustmentData {
+  adjustmentDate?: string;
+  amount: number;
+  note?: string;
 }
 
 // ============================================
